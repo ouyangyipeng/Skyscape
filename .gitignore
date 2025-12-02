@@ -1,0 +1,15 @@
+build/
+bin/
+*.exe
+*.lib
+*.dll
+*.pdb
+*.ilk
+*.exp
+*.obj
+.vscode/
+.idea/
+*.user
+*.log
+__pycache__/
+.DS_Store
