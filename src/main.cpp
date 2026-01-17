@@ -132,16 +132,33 @@ int main() {
 
         // 2. Draw Plane
         // Draw plane slightly in front of camera to simulate "cockpit" or 3rd person view
-        glm::vec3 planePos = camera.Position + camera.Front * 10.0f - camera.Up * 2.0f;
-        
+        //glm::vec3 planePos = camera.Position + camera.Front * 10.0f - camera.Up * 2.0f;
+        // 飞机位置固定在相机前方
+        glm::vec3 planePos = camera.Position + camera.Front * 20.0f;
+
+        // ✅ 修改：相机位置在机尾后方，看向机头
+        glm::vec3 planeForward = glm::normalize(camera.Front); // 飞机朝向
+        glm::vec3 cameraOffset = -planeForward * 5.0f  // 后退到机尾
+                        + camera.Up * 30.0f;      // 稍微抬高视角
+
+        glm::vec3 thirdPersonCamPos = planePos + cameraOffset;
+
+        // 创建从机尾看向机头的视角
+        glm::mat4 thirdPersonView = glm::lookAt(
+            thirdPersonCamPos,                    // 相机位置：机尾后方
+            planePos + planeForward * 5.0f,      // 看向：机头方向（飞机前方5米处）
+            camera.Up                             // 上方向
+        );
+
+
         planeShader.use();
         planeShader.setMat4("projection", projection);
-        planeShader.setMat4("view", view);
+        planeShader.setMat4("view", thirdPersonView);
         planeShader.setVec3("lightColor", glm::vec3(1.0f, 0.95f, 0.9f));
         planeShader.setVec3("lightPos", lightPos);
-        planeShader.setVec3("viewPos", camera.Position);
+        planeShader.setVec3("viewPos", thirdPersonCamPos);
 
-        plane.Draw(planeShader, planePos, camera.Front, 2.0f); // Larger plane
+        plane.Draw(planeShader, planePos, camera.Front, 1.0f); // Larger plane
 
         // 3. Draw Skybox (last)
         skybox.Draw(view, projection);

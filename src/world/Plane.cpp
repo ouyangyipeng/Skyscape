@@ -14,15 +14,20 @@ Plane::Plane() {
 
 void Plane::setupMesh() {
     std::vector<glm::vec3> temp_vertices;
+    std::vector<glm::vec3> temp_normals;
     std::vector<float> vertices; // Final buffer: pos(3) + normal(3)
 
-    std::ifstream file("assets/models/airplane.obj");
+    
+    //std::ifstream file("assets/models/airplane4.obj");
+    std::ifstream file("D:/rolling/ComputerGraphics/final/assets/models/airplane4.obj");
     if (!file.is_open()) {
         std::cerr << "Failed to open airplane.obj" << std::endl;
         return;
     }
 
     std::string line;
+     int validFaces = 0;
+    int invalidFaces = 0;
     while (std::getline(file, line)) {
         std::stringstream ss(line);
         std::string prefix;
@@ -32,7 +37,14 @@ void Plane::setupMesh() {
             glm::vec3 vertex;
             ss >> vertex.x >> vertex.y >> vertex.z;
             temp_vertices.push_back(vertex);
-        } else if (prefix == "f") {
+        }else if (prefix == "vn") {
+            glm::vec3 normal;
+            if (ss >> normal.x >> normal.y >> normal.z) {
+                temp_normals.push_back(normal);
+            }
+        } 
+        
+        else if (prefix == "f") {
             std::vector<int> faceIndices;
             std::string segment;
             while (ss >> segment) {
@@ -40,11 +52,26 @@ void Plane::setupMesh() {
                 std::string vStr;
                 std::getline(segmentSS, vStr, '/');
                 try {
-                    faceIndices.push_back(std::stoi(vStr) - 1);
-                } catch (...) { continue; }
+                    int idx = std::stoi(vStr) - 1; // OBJ索引从1开始
+                    
+                    // 关键修复：验证索引是否有效
+                    if (idx >= 0 && idx < static_cast<int>(temp_vertices.size())) {
+                        faceIndices.push_back(idx);
+                    } else {
+                        std::cerr << "[Plane] Invalid vertex index: " << (idx + 1) 
+                                  << " (max: " << temp_vertices.size() << ")" << std::endl;
+                        faceIndices.clear(); // 清空无效面
+                        break;
+                    }
+                } catch (const std::exception& e) {
+                    std::cerr << "[Plane] Parse error: " << e.what() << std::endl;
+                    faceIndices.clear();
+                    break;
+                }
             }
 
             if (faceIndices.size() >= 3) {
+                validFaces++;
                 for (size_t i = 1; i < faceIndices.size() - 1; ++i) {
                     glm::vec3 v0 = temp_vertices[faceIndices[0]];
                     glm::vec3 v1 = temp_vertices[faceIndices[i]];
@@ -68,6 +95,16 @@ void Plane::setupMesh() {
     }
 
     m_VertexCount = vertices.size() / 6;
+
+    // 详细的调试输出
+    std::cout << "[Plane] ========== OBJ Load Summary ==========" << std::endl;
+    std::cout << "[Plane] Source vertices: " << temp_vertices.size() << std::endl;
+    std::cout << "[Plane] Source normals: " << temp_normals.size() << std::endl;
+    std::cout << "[Plane] Valid faces: " << validFaces << std::endl;
+    std::cout << "[Plane] Invalid faces: " << invalidFaces << std::endl;
+    std::cout << "[Plane] Final vertex count: " << m_VertexCount << std::endl;
+    std::cout << "[Plane] Triangle count: " << m_VertexCount / 3 << std::endl;
+    std::cout << "[Plane] ======================================" << std::endl;
 
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -128,6 +165,6 @@ void Plane::Draw(Shader& shader, glm::vec3 position, glm::vec3 direction, float 
     shader.setMat4("model", model);
 
     glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLES, 0, 180); // 5 boxes * 36 vertices
+    glDrawArrays(GL_TRIANGLES, 0, m_VertexCount); // 5 boxes * 36 vertices
     glBindVertexArray(0);
 }
