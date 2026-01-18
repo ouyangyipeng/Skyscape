@@ -430,23 +430,23 @@ int main() {
         planeShader.setVec3("viewPos", thirdPersonCamPos);
         plane.Draw(planeShader, planePos, camera.Front, 1.0f);
         
-        // 3. Draw Particle Systems
-        particleShader.use();
-        particleShader.setMat4("view", thirdPersonView);
-        particleShader.setMat4("projection", projection);
-        // trailSystem.Draw(particleShader.ID);
-        if (currentWeather != WeatherType::None) {
-            weatherSystem.Draw(particleShader.ID);
-        }
+        // // 3. Draw Particle Systems
+        // particleShader.use();
+        // particleShader.setMat4("view", thirdPersonView);
+        // particleShader.setMat4("projection", projection);
+        // // trailSystem.Draw(particleShader.ID);
+        // if (currentWeather != WeatherType::None) {
+        //     weatherSystem.Draw(particleShader.ID);
+        // }
         
-        // 4. Draw Stars (at night)
-        float starVisibility = glm::clamp(-dayProgress * 3.0f, 0.0f, 1.0f);
-        if (starVisibility > 0.0f) {
-            starsShader.use();
-            starsShader.setMat4("view", view);
-            starsShader.setMat4("projection", projection);
-            stars.Draw(starsShader.ID, starVisibility);
-        }
+        // // 4. Draw Stars (at night)
+        // float starVisibility = glm::clamp(-dayProgress * 3.0f, 0.0f, 1.0f);
+        // if (starVisibility > 0.0f) {
+        //     starsShader.use();
+        //     starsShader.setMat4("view", view);
+        //     starsShader.setMat4("projection", projection);
+        //     stars.Draw(starsShader.ID, starVisibility);
+        // }
 
         // 5. Draw Skybox (last)
         skybox.Draw(view, projection);
