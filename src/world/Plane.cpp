@@ -12,14 +12,56 @@ Plane::Plane() {
     setupMesh();
 }
 
+void Plane::Update(float deltaTime, glm::vec3 velocity, glm::vec3 targetDirection) {
+    m_Time += deltaTime;
+    
+    // Calculate current speed
+    m_CurrentSpeed = glm::length(velocity);
+    
+    // Realistic turning with radius constraint
+    // Normalize target direction
+    if (glm::length(targetDirection) > 0.01f) {
+        targetDirection = glm::normalize(targetDirection);
+        
+        // Calculate turn rate based on speed (faster = wider turns)
+        float maxTurnRate = 1.2f / (1.0f + m_CurrentSpeed * 0.001f); // radians per second
+        
+        // Smoothly interpolate direction with turn rate limit
+        glm::vec3 toTarget = targetDirection - m_CurrentDirection;
+        float turnAngle = glm::length(toTarget);
+        
+        if (turnAngle > 0.01f) {
+            float actualTurn = (turnAngle < maxTurnRate * deltaTime) ? turnAngle : (maxTurnRate * deltaTime);
+            m_CurrentDirection = glm::normalize(m_CurrentDirection + toTarget * (actualTurn / turnAngle));
+        }
+    }
+    
+    // Calculate roll based on horizontal velocity change (turning)
+    glm::vec3 velocityChange = velocity - m_LastVelocity;
+    float lateralAccel = velocityChange.x / (deltaTime + 0.001f);
+    
+    // Enhanced roll based on turn rate
+    glm::vec3 right = glm::cross(m_CurrentDirection, glm::vec3(0, 1, 0));
+    float turnInfluence = glm::dot(velocityChange, right) * 0.5f;
+    
+    float targetRoll = glm::clamp((lateralAccel * -0.15f) + turnInfluence, -35.0f, 35.0f);
+    m_RollAngle = glm::mix(m_RollAngle, targetRoll, deltaTime * 2.0f);
+    
+    // Calculate pitch based on vertical velocity change
+    float verticalAccel = velocityChange.y / (deltaTime + 0.001f);
+    float targetPitch = glm::clamp(verticalAccel * -0.1f, -15.0f, 15.0f);
+    m_PitchAngle = glm::mix(m_PitchAngle, targetPitch, deltaTime * 1.5f);
+    
+    m_LastVelocity = velocity;
+}
+
 void Plane::setupMesh() {
     std::vector<glm::vec3> temp_vertices;
     std::vector<glm::vec3> temp_normals;
     std::vector<float> vertices; // Final buffer: pos(3) + normal(3)
 
     
-    //std::ifstream file("assets/models/airplane4.obj");
-    std::ifstream file("D:/rolling/ComputerGraphics/final/assets/models/airplane4.obj");
+    std::ifstream file("assets/models/airplane4.obj");
     if (!file.is_open()) {
         std::cerr << "Failed to open airplane.obj" << std::endl;
         return;
@@ -125,6 +167,11 @@ void Plane::setupMesh() {
 }
 
 void Plane::Draw(Shader& shader, glm::vec3 position, glm::vec3 direction, float scale) {
+    // Cache for trail emission
+    m_CurrentPosition = position;
+    m_CurrentDirection = direction;
+    m_CurrentScale = scale;
+    
     shader.use();
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::translate(model, position);
@@ -149,22 +196,49 @@ void Plane::Draw(Shader& shader, glm::vec3 position, glm::vec3 direction, float 
     // Let's just draw it at 'position' with 'scale'
     model = glm::scale(model, glm::vec3(scale));
     
-    // Rotate to point forward (if direction is provided)
+    // Base rotation to make plane horizontal first
+    model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1, 0, 0));
+    
     // Calculate yaw and pitch from direction vector
     float yaw = atan2(direction.x, direction.z);
-    float pitch = asin(-direction.y);
-
+    float basePitch = asin(-direction.y);
+    
+    // Apply yaw rotation (turn left/right)
     model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
-    model = glm::rotate(model, pitch, glm::vec3(1.0f, 0.0f, 0.0f));
-    // Also rotate 180 degrees around Y because our model points +Z but camera looks -Z?
-    // Actually, atan2(x, z) gives angle from +Z axis.
-    // If direction is (0,0,-1), atan2(0, -1) = pi (180 deg).
-    // So it rotates 180 deg.
-    // Our model points +Z. Rotating 180 makes it point -Z. Correct.
+    
+    // Apply pitch with animation
+    float animatedPitch = basePitch + glm::radians(m_PitchAngle);
+    // Add very subtle bobbing effect
+    animatedPitch += sin(m_Time * 1.5f) * 0.01f;
+    model = glm::rotate(model, animatedPitch, glm::vec3(1.0f, 0.0f, 0.0f));
+    
+    // Apply roll with animation
+    float animatedRoll = glm::radians(m_RollAngle);
+    // Add very subtle swaying effect
+    animatedRoll += sin(m_Time * 1.2f) * 0.015f;
+    model = glm::rotate(model, animatedRoll, glm::vec3(0.0f, 0.0f, 1.0f));
 
     shader.setMat4("model", model);
 
     glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLES, 0, m_VertexCount); // 5 boxes * 36 vertices
+    glDrawArrays(GL_TRIANGLES, 0, m_VertexCount);
     glBindVertexArray(0);
+}
+
+std::vector<glm::vec3> Plane::GetTrailPositions() const {
+    // Calculate trail emission points (engine/wingtips)
+    // Approximate positions for F-22: two engines at the back
+    
+    glm::vec3 up = glm::vec3(0, 1, 0);
+    glm::vec3 right = glm::normalize(glm::cross(m_CurrentDirection, up));
+    
+    // Two engine positions behind the plane
+    float engineOffset = 2.0f * m_CurrentScale;
+    float engineSeparation = 3.0f * m_CurrentScale;
+    
+    std::vector<glm::vec3> positions;
+    positions.push_back(m_CurrentPosition - m_CurrentDirection * engineOffset + right * engineSeparation);
+    positions.push_back(m_CurrentPosition - m_CurrentDirection * engineOffset - right * engineSeparation);
+    
+    return positions;
 }

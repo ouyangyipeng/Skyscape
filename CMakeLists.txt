@@ -72,6 +72,10 @@ add_executable(Skyscape
     src/world/Tree.cpp
     src/world/Cabin.h
     src/world/Cabin.cpp
+    src/world/ParticleSystem.h
+    src/world/ParticleSystem.cpp
+    src/world/Stars.h
+    src/world/Stars.cpp
 )
 
 target_include_directories(Skyscape PUBLIC 

@@ -1,3 +1,5 @@
+#include <iostream>
+#include <stb_image.h>
 #include "InfiniteTerrain.h"
 #include <glad/glad.h>
 #include <cmath>
@@ -325,14 +327,30 @@ void InfiniteTerrain::Update(glm::vec3 cameraPos) {
 
 void InfiniteTerrain::Draw(Shader& shader) {
     shader.use();
+    // 绑定贴图到纹理单元0/1/2，并传递给shader
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, m_SnowTex);
+    shader.setInt("snowTex", 0);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, m_RockTex);
+    shader.setInt("rockTex", 1);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, m_WaterTex);
+    shader.setInt("waterTex", 2);
     glm::mat4 model = glm::mat4(1.0f);
     shader.setMat4("model", model);
-    
     for (auto& pair : m_Chunks) {
         glBindVertexArray(pair.second.VAO);
         glDrawElements(GL_TRIANGLES, pair.second.indexCount, GL_UNSIGNED_INT, 0);
     }
     glBindVertexArray(0);
+    // 解绑
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void InfiniteTerrain::DrawTrees(Shader& treeShader) {

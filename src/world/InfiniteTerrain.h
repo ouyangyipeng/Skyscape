@@ -65,7 +65,6 @@ class InfiniteTerrain {
 public:
     InfiniteTerrain(int chunkSize = 64, int viewDistance = 5);
     ~InfiniteTerrain();
-    
     void Update(glm::vec3 cameraPos);
     void Draw(class Shader& shader);
     void DrawTrees(class Shader& treeShader); // ✅ 添加此声明
@@ -73,7 +72,6 @@ public:
     void DrawFlowers(class Shader& flowerShader);
     void DrawBoats(class Shader& boatShader, float time); 
     float GetHeight(float x, float z) const;
-
 private:
     int m_ChunkSize;
     int m_ViewDistance;
@@ -99,6 +97,11 @@ private:
     unsigned int m_BoatVBO;
     int m_BoatVertexCount;
     
+    // Texture IDs
+    unsigned int m_SnowTex = 0;
+    unsigned int m_RockTex = 0;
+    unsigned int m_WaterTex = 0;
+    
     TerrainChunk GenerateChunk(int chunkX, int chunkZ);
     void GenerateTreesForChunk(TerrainChunk& chunk, int chunkX, int chunkZ); 
     void GenerateCabinsForChunk(TerrainChunk& chunk, int chunkX, int chunkZ); 
@@ -110,4 +113,5 @@ private:
     void InitializeBoatMesh(); 
     float Noise(float x, float z) const;
     glm::vec3 GetTerrainColor(float height) const;
+    void LoadTerrainTextures();
 };
