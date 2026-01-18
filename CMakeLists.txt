@@ -68,6 +68,10 @@ add_executable(Skyscape
     src/world/Grid.cpp
     src/world/InfiniteTerrain.h
     src/world/InfiniteTerrain.cpp
+    src/world/Tree.h
+    src/world/Tree.cpp
+    src/world/Cabin.h
+    src/world/Cabin.cpp
 )
 
 target_include_directories(Skyscape PUBLIC 
