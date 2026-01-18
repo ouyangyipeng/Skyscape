@@ -27,18 +27,21 @@ class InfiniteTerrain {
 public:
     InfiniteTerrain(int chunkSize = 64, int viewDistance = 5);
     ~InfiniteTerrain();
-    
     void Update(glm::vec3 cameraPos);
     void Draw(class Shader& shader);
-    
     float GetHeight(float x, float z) const;
-
 private:
     int m_ChunkSize;
     int m_ViewDistance;
     std::unordered_map<ChunkKey, TerrainChunk, ChunkKeyHash> m_Chunks;
     
+    // Texture IDs
+    unsigned int m_SnowTex = 0;
+    unsigned int m_RockTex = 0;
+    unsigned int m_WaterTex = 0;
+    
     TerrainChunk GenerateChunk(int chunkX, int chunkZ);
     float Noise(float x, float z) const;
     glm::vec3 GetTerrainColor(float height) const;
+    void LoadTerrainTextures();
 };
