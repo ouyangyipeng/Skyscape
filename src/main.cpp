@@ -211,7 +211,7 @@ int main() {
         "assets/textures/skybox/Daylight Box_Top.bmp",
         "assets/textures/skybox/Daylight Box_Bottom.bmp",
         "assets/textures/skybox/Daylight Box_Front.bmp",
-        "D:\\rolling\\ComputerGraphics\\final\\assets\\textures\\skybox\\Daylight Box_Back.bmp"
+        "assets/textures/skybox/Daylight Box_Back.bmp"  // Fixed: Use relative path
     };
     Skybox skybox(faces);
     std::cout << "[4/6] Skybox loaded" << std::endl;
@@ -266,28 +266,127 @@ int main() {
             sin(sunAngle) * 1000.0f
         );
 
-        // Input
-        processInput(window);
-        
         // Boost speed with Shift
         if (glfwGetKey(window.getNativeWindow(), GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
             camera.MovementSpeed = 800.0f;
         else
             camera.MovementSpeed = 150.0f;
 
+        // Save position before any input
+        glm::vec3 positionBeforeInput = camera.Position;
+        
+        // Process input (will update camera position)
+        processInput(window);
         window.pollEvents();
 
-        // Calculate camera velocity
-        cameraVelocity = (camera.Position - lastCameraPos) / deltaTime;
+        // === ENHANCED COLLISION DETECTION - PREVENT PLANE CLIPPING ===
+        float safetyMargin = 25.0f; // Increased camera safety margin
+        float planeLength = 20.0f;  // Distance from camera to plane
+        bool collisionDetected = false;
         
-        // Ground collision detection
-        float groundHeight = terrain.GetHeight(camera.Position.x, camera.Position.z);
-        float minHeight = groundHeight + 5.0f; // 5 units above ground
-        if (camera.Position.y < minHeight) {
-            camera.Position.y = minHeight;
-            cameraVelocity.y = glm::max(0.0f, cameraVelocity.y);
+        // Calculate plane head position (where the actual plane model is)
+        glm::vec3 planeHeadPos = camera.Position + camera.Front * planeLength;
+        
+        // 1. CRITICAL: Check terrain at plane head position FIRST
+        float terrainAtPlaneHead = terrain.GetHeight(planeHeadPos.x, planeHeadPos.z);
+        float planeMinSafeHeight = terrainAtPlaneHead + 18.0f; // Increased clearance for plane head
+        
+        // If plane head is too low, push ENTIRE system up (camera + plane)
+        if (planeHeadPos.y < planeMinSafeHeight) {
+            // Calculate how much we need to lift
+            float heightDeficit = planeMinSafeHeight - planeHeadPos.y;
+            
+            // Lift camera up to compensate
+            camera.Position.y += heightDeficit;
+            
+            // Recalculate plane head after adjustment
+            planeHeadPos = camera.Position + camera.Front * planeLength;
+            
+            collisionDetected = true;
+            
+            static float lastPlaneHeadCollision = 0.0f;
+            if (currentFrame - lastPlaneHeadCollision > 0.5f) {
+                std::cout << "[AIR WALL] Plane head collision! Terrain: " << terrainAtPlaneHead 
+                          << "m, Plane head: " << planeHeadPos.y << "m - Movement BLOCKED!" << std::endl;
+                lastPlaneHeadCollision = currentFrame;
+            }
         }
         
+        // 2. Check camera position (ensure camera stays above terrain)
+        float terrainAtCamera = terrain.GetHeight(camera.Position.x, camera.Position.z);
+        float minCameraSafeHeight = terrainAtCamera + safetyMargin;
+        
+        if (camera.Position.y < minCameraSafeHeight) {
+            camera.Position.y = minCameraSafeHeight;
+            collisionDetected = true;
+            
+            static float lastCameraGroundMsg = 0.0f;
+            if (currentFrame - lastCameraGroundMsg > 1.0f) {
+                std::cout << "[COLLISION] Camera too low! Terrain: " << terrainAtCamera << "m" << std::endl;
+                lastCameraGroundMsg = currentFrame;
+            }
+        }
+        
+        // 3. EXTENDED: Check multiple points along entire plane body with LARGER clearance
+        // Check from 5m to 35m ahead (covering entire plane + buffer)
+        for (float checkDist = 5.0f; checkDist <= 35.0f; checkDist += 5.0f) {
+            glm::vec3 checkPoint = camera.Position + camera.Front * checkDist;
+            float terrainAtPoint = terrain.GetHeight(checkPoint.x, checkPoint.z);
+            float requiredClearance = 15.0f; // Increased clearance requirement
+            
+            if (checkPoint.y < terrainAtPoint + requiredClearance) {
+                // Block forward movement by reverting
+                camera.Position = positionBeforeInput;
+                
+                // Ensure safe height at reverted position
+                float revertedTerrain = terrain.GetHeight(camera.Position.x, camera.Position.z);
+                camera.Position.y = glm::max(camera.Position.y, revertedTerrain + safetyMargin);
+                
+                collisionDetected = true;
+                
+                static float lastBodyCollision = 0.0f;
+                if (currentFrame - lastBodyCollision > 0.5f) {
+                    std::cout << "[AIR WALL] Plane body collision at " << checkDist << "m ahead! Terrain: " 
+                              << terrainAtPoint << "m, Check point: " << checkPoint.y << "m - BLOCKED!" << std::endl;
+                    lastBodyCollision = currentFrame;
+                }
+                break;
+            }
+        }
+        
+        // 4. Additional forward collision check (prevent flying into mountains)
+        if (!collisionDetected) {
+            glm::vec3 movementDir = camera.Position - positionBeforeInput;
+            if (glm::length(movementDir) > 0.01f) {
+                // Check multiple sample points ahead
+                for (float dist = 5.0f; dist <= 25.0f; dist += 5.0f) {
+                    glm::vec3 checkPos = camera.Position + glm::normalize(movementDir) * dist;
+                    float terrainAhead = terrain.GetHeight(checkPos.x, checkPos.z);
+                    
+                    // If terrain ahead is dangerously close
+                    if (terrainAhead > camera.Position.y - 10.0f) {
+                        camera.Position = positionBeforeInput;
+                        
+                        // Ensure safe height at old position
+                        float oldTerrain = terrain.GetHeight(camera.Position.x, camera.Position.z);
+                        camera.Position.y = glm::max(camera.Position.y, oldTerrain + safetyMargin);
+                        
+                        collisionDetected = true;
+                        
+                        static float lastWallMsg = 0.0f;
+                        if (currentFrame - lastWallMsg > 0.5f) {
+                            std::cout << "[AIR WALL] Mountain ahead! Terrain: " << terrainAhead 
+                                      << "m, Altitude: " << camera.Position.y << "m" << std::endl;
+                            lastWallMsg = currentFrame;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Calculate velocity for plane animation
+        cameraVelocity = (camera.Position - positionBeforeInput) / deltaTime;
         lastCameraPos = camera.Position;
         
         // Update plane animation with realistic turning
@@ -367,13 +466,19 @@ int main() {
         glm::mat4 view = camera.GetViewMatrix();
 
         // Calculate plane position and third person view
+        // Place plane ahead of camera, but ensure it's above terrain
         glm::vec3 planePos = camera.Position + camera.Front * 20.0f;
+        
+        // CRITICAL: Ensure plane is also above terrain (prevent visual clipping)
+        float planeTerrainHeight = terrain.GetHeight(planePos.x, planePos.z);
+        planePos.y = glm::max(planePos.y, planeTerrainHeight + 8.0f); // Keep plane at least 8m above terrain
+        
         glm::vec3 planeForward = glm::normalize(camera.Front);
-        glm::vec3 cameraOffset = -planeForward * 5.0f + camera.Up * 30.0f;
+        glm::vec3 cameraOffset = -planeForward * 50.0f + camera.Up * 20.0f; // Further back and less high
         glm::vec3 thirdPersonCamPos = planePos + cameraOffset;
         glm::mat4 thirdPersonView = glm::lookAt(
             thirdPersonCamPos,
-            planePos + planeForward * 5.0f,
+            planePos,  // Look directly at plane
             camera.Up
         );
 

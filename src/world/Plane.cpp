@@ -174,47 +174,30 @@ void Plane::Draw(Shader& shader, glm::vec3 position, glm::vec3 direction, float 
     
     shader.use();
     glm::mat4 model = glm::mat4(1.0f);
+    
+    // Step 1: Translate to position
     model = glm::translate(model, position);
     
-    // Simple rotation to face direction (assuming default is +Z)
-    // For a real flight sim, we'd use quaternions or a full orientation matrix
-    // Here we just align it to the camera front vector roughly
-    
-    // Calculate rotation based on direction
-    glm::vec3 defaultDir(0.0f, 0.0f, -1.0f); // Our plane points -Z by default? No, vertices are +Z nose.
-    // Vertices: Nose is (0,0,1). So it points +Z.
-    // Camera Front is usually -Z. 
-    // Let's rotate it to match direction.
-    
-    // Simplified: Just translate for now, maybe rotate later if we have orientation.
-    // If we want it to follow the camera, we can just use the camera's position + offset.
-    
-    // Let's assume the plane is "the player" and we are looking at it, or we are inside it.
-    // If we are inside, we don't draw it.
-    // If we are 3rd person, we draw it in front of camera.
-    
-    // Let's just draw it at 'position' with 'scale'
+    // Step 2: Scale
     model = glm::scale(model, glm::vec3(scale));
     
-    // Base rotation to make plane horizontal first
-    model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1, 0, 0));
+    // Step 3: Base rotation to make plane horizontal
+    model = glm::rotate(model, glm::radians(0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
     
-    // Calculate yaw and pitch from direction vector
+    // Step 4: Calculate and apply flight direction
     float yaw = atan2(direction.x, direction.z);
     float basePitch = asin(-direction.y);
     
     // Apply yaw rotation (turn left/right)
     model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
     
-    // Apply pitch with animation
-    float animatedPitch = basePitch + glm::radians(m_PitchAngle);
-    // Add very subtle bobbing effect
+    // Apply pitch with animation (add slight upward tilt)
+    float animatedPitch = basePitch + glm::radians(m_PitchAngle) + glm::radians(8.0f); // +8° nose up
     animatedPitch += sin(m_Time * 1.5f) * 0.01f;
     model = glm::rotate(model, animatedPitch, glm::vec3(1.0f, 0.0f, 0.0f));
     
     // Apply roll with animation
     float animatedRoll = glm::radians(m_RollAngle);
-    // Add very subtle swaying effect
     animatedRoll += sin(m_Time * 1.2f) * 0.015f;
     model = glm::rotate(model, animatedRoll, glm::vec3(0.0f, 0.0f, 1.0f));
 
