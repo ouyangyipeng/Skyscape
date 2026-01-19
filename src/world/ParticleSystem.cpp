@@ -17,15 +17,15 @@ ParticleSystem::ParticleSystem(ParticleType type, int maxParticles)
             break;
         case ParticleType::Rain:
             m_EmissionRate = 200.0f;
-            m_ParticleLife = 5.0f;
-            m_ParticleSize = 2.0f;
-            m_Gravity = glm::vec3(0.0f, -20.0f, 0.0f);
+            m_ParticleLife = 6.0f;
+            m_ParticleSize = 8.0f;
+            m_Gravity = glm::vec3(0.0f, -15.0f, 0.0f);
             break;
         case ParticleType::Snow:
-            m_EmissionRate = 100.0f;
-            m_ParticleLife = 8.0f;
-            m_ParticleSize = 4.0f;
-            m_Gravity = glm::vec3(0.0f, -2.0f, 0.0f);
+            m_EmissionRate = 150.0f;
+            m_ParticleLife = 6.0f;
+            m_ParticleSize = 5.0f;
+            m_Gravity = glm::vec3(0.0f, -10.0f, 0.0f);
             break;
     }
     
@@ -104,10 +104,10 @@ void ParticleSystem::Emit(const glm::vec3& position, const glm::vec3& direction,
                 m_Particles[idx].color = glm::vec4(0.85f, 0.9f, 0.95f, 0.5f);
                 break;
             case ParticleType::Rain:
-                m_Particles[idx].color = glm::vec4(0.7f, 0.8f, 1.0f, 0.6f);
+                m_Particles[idx].color = glm::vec4(0.5f, 0.6f, 0.85f, 1.0f);
                 break;
             case ParticleType::Snow:
-                m_Particles[idx].color = glm::vec4(1.0f, 1.0f, 1.0f, 0.9f);
+                m_Particles[idx].color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
                 break;
         }
     }
@@ -126,12 +126,19 @@ void ParticleSystem::Update(float deltaTime) {
                 // Trail expands and fades gradually
                 particle.color.a = lifeRatio * 0.5f;
                 particle.size = m_ParticleSize * (1.0f + (1.0f - lifeRatio) * 0.8f);
-            } else {
-                particle.color.a = lifeRatio * 0.6f;
-            }
-            
-            // Add some randomness for snow
-            if (m_Type == ParticleType::Snow) {
+            } else if (m_Type == ParticleType::Rain) {
+                // ✅ 雨滴保持高不透明度（只在最后 30% 生命周期淡化）
+                if (lifeRatio > 0.05f) {
+                    particle.color.a = 1.0f; // 保持初始透明度
+                } else {
+                    particle.color.a = 1.0f * (lifeRatio / 0.3f); // 1.0 → 0
+                }
+            } else if (m_Type == ParticleType::Snow) {
+                // ✅ 雪花保持白色，轻微淡化
+                //particle.color.a = 1.0f * lifeRatio;
+                particle.color.a = 0.8f ;
+                
+                // Add some randomness for snow
                 particle.velocity.x += sin(particle.life * 3.0f) * 0.5f * deltaTime;
                 particle.velocity.z += cos(particle.life * 2.5f) * 0.5f * deltaTime;
             }
@@ -139,7 +146,22 @@ void ParticleSystem::Update(float deltaTime) {
     }
 }
 
+
 void ParticleSystem::Draw(unsigned int shaderProgram) {
+    // ✅ 统计活跃粒子数量（用于调试）
+    int aliveCount = 0;
+    for (const auto& p : m_Particles) {
+        if (p.life > 0.0f) aliveCount++;
+    }
+    
+    if (aliveCount == 0) {
+        return; // ✅ 没有活跃粒子，直接返回
+    }
+    
+    // ✅ 更新 VBO（只上传活跃粒子）
+    glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, m_Particles.size() * sizeof(Particle), m_Particles.data());
+    
     // Enable blending for transparency
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -148,22 +170,12 @@ void ParticleSystem::Draw(unsigned int shaderProgram) {
     // Enable point sprites
     glEnable(GL_PROGRAM_POINT_SIZE);
     
-    // Update VBO
-    glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, m_Particles.size() * sizeof(Particle), m_Particles.data());
-    
     // Draw
     glUseProgram(shaderProgram);
     glBindVertexArray(m_VAO);
     
-    int aliveCount = 0;
-    for (const auto& p : m_Particles) {
-        if (p.life > 0.0f) aliveCount++;
-    }
-    
-    if (aliveCount > 0) {
-        glDrawArrays(GL_POINTS, 0, m_Particles.size());
-    }
+    // ✅ 绘制所有粒子（OpenGL 会自动跳过 alpha=0 的粒子）
+    glDrawArrays(GL_POINTS, 0, m_Particles.size());
     
     glBindVertexArray(0);
     

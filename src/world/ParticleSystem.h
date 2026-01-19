@@ -30,6 +30,8 @@ public:
     void SetParticleLife(float life) { m_ParticleLife = life; }
     void SetParticleSize(float size) { m_ParticleSize = size; }
     void SetGravity(const glm::vec3& gravity) { m_Gravity = gravity; }
+
+    ParticleType GetType() const { return m_Type; }
     
 private:
     void InitRenderData();

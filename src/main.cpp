@@ -72,6 +72,9 @@ float timeSpeed = 1.0f; // 1 second = 1 minute in-game
 enum class WeatherType { None, Rain, Snow };
 WeatherType currentWeather = WeatherType::None;
 
+// ✅ 添加粒子系统指针（动态切换）
+std::unique_ptr<ParticleSystem> weatherSystem = nullptr;
+
 void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
     if (firstMouse) {
         lastX = xpos;
@@ -167,6 +170,8 @@ int main() {
     Shader cabinShader("assets/shaders/tree.vert", "assets/shaders/tree.frag"); // ✅ 复用树木着色器
     Shader flowerShader("assets/shaders/flower.vert", "assets/shaders/flower.frag");
     Shader boatShader("assets/shaders/tree.vert", "assets/shaders/tree.frag");
+    Shader particleShader("assets/shaders/particle.vert", "assets/shaders/particle.frag"); // ✅ 新增
+    Shader skyboxShader("assets/shaders/skybox.vert", "assets/shaders/skybox.frag"); // 如果有天空盒着色器
     // // Infinite Terrain (auto-generates as you fly)
     InfiniteTerrain terrain(70, 30); // chunk size 64, view distance 8 chunks
     
@@ -229,7 +234,7 @@ int main() {
     // Particle Systems
     std::cout << "[6/6] Initializing particle systems..." << std::endl;
     // ParticleSystem trailSystem(ParticleType::Trail, 2000);
-    ParticleSystem weatherSystem(ParticleType::Rain, 5000);
+    //ParticleSystem weatherSystem(ParticleType::Rain, 8000);
     float weatherEmissionTimer = 0.0f;
     std::cout << "[6/6] Particle systems initialized" << std::endl;
 
@@ -304,35 +309,43 @@ int main() {
         
         // Update weather system
         if (currentWeather != WeatherType::None) {
-            // Switch weather type if needed
-            ParticleType newWeatherType = (currentWeather == WeatherType::Rain) ? ParticleType::Rain : ParticleType::Snow;
+    // ✅ 根据天气类型重新创建粒子系统
+    ParticleType requiredType = (currentWeather == WeatherType::Rain) ? ParticleType::Rain : ParticleType::Snow;
+    if (!weatherSystem || weatherSystem->GetType() != requiredType) {
+        weatherSystem = std::make_unique<ParticleSystem>(requiredType, 200000);
+        std::cout << "[Weather] Switched to " << (requiredType == ParticleType::Rain ? "Rain" : "Snow") << std::endl;
+    }
+    
+    weatherSystem->Update(deltaTime);
+    
+    // Emit weather particles around camera
+    weatherEmissionTimer += deltaTime;
+    if (weatherEmissionTimer > 0.016f) { // ~60 times per second
+        // ✅ 增加发射率
+        float emitRate = (currentWeather == WeatherType::Rain) ? 2000.0f : 300.0f;
+        int particlesToEmit = static_cast<int>(emitRate * weatherEmissionTimer);
+        
+        for (int i = 0; i < particlesToEmit; i++) {
+            // ✅ 扩大生成范围
+            float x = camera.Position.x + ((rand() % 600) - 300);
+            float y = camera.Position.y + 100.0f + (rand() % 80); // 高度 100-150
+            float z = camera.Position.z + ((rand() % 600) - 300);
             
-            weatherSystem.Update(deltaTime);
+            glm::vec3 emitPos(x, y, z);
+            glm::vec3 velocity(0, -20, 0); // ✅ 雨的下落速度（更快）
             
-            // Emit weather particles around camera
-            weatherEmissionTimer += deltaTime;
-            if (weatherEmissionTimer > 0.016f) { // ~60 times per second
-                float emitRate = (currentWeather == WeatherType::Rain) ? 200.0f : 100.0f;
-                int particlesToEmit = static_cast<int>(emitRate * weatherEmissionTimer);
-                
-                for (int i = 0; i < particlesToEmit; i++) {
-                    // Random position in a box above and around camera
-                    float x = camera.Position.x + ((rand() % 200) - 100);
-                    float y = camera.Position.y + 50.0f + (rand() % 20);
-                    float z = camera.Position.z + ((rand() % 200) - 100);
-                    
-                    glm::vec3 emitPos(x, y, z);
-                    glm::vec3 velocity(0, -10, 0);
-                    
-                    if (currentWeather == WeatherType::Snow) {
-                        velocity.y = -2.0f;
-                    }
-                    
-                    weatherSystem.Emit(emitPos, velocity, 1);
-                }
-                weatherEmissionTimer = 0.0f;
+            if (currentWeather == WeatherType::Snow) {
+                velocity.y = -10.0f; // ✅ 雪下落慢
+                // ✅ 雪花有水平漂移
+                velocity.x = ((rand() % 100) - 50) / 15.0f; 
+                velocity.z = ((rand() % 100) - 50) / 15.0f;
             }
+            
+            weatherSystem->Emit(emitPos, velocity, 1);
         }
+        weatherEmissionTimer = 0.0f;
+    }
+}
 
         // Render
         // Dynamic sky color based on time of day
@@ -438,6 +451,26 @@ int main() {
         // if (currentWeather != WeatherType::None) {
         //     weatherSystem.Draw(particleShader.ID);
         // }
+
+        // 3. Draw Particle Systems
+if (currentWeather != WeatherType::None&& weatherSystem) {
+    // ✅ 启用混合和深度测试设置
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE); // 粒子不写入深度缓冲
+    glEnable(GL_PROGRAM_POINT_SIZE); // ✅ 关键：允许着色器控制点大小
+    
+    particleShader.use();
+    particleShader.setMat4("view", view); // ✅ 使用第一人称视角（不是 thirdPersonView）
+    particleShader.setMat4("projection", projection);
+    
+    weatherSystem->Draw(particleShader.ID);
+    
+    // ✅ 恢复状态
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+    glDisable(GL_PROGRAM_POINT_SIZE);
+}
         
         // // 4. Draw Stars (at night)
         // float starVisibility = glm::clamp(-dayProgress * 3.0f, 0.0f, 1.0f);
